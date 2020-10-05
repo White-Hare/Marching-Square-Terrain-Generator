@@ -1,13 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.PlayerLoop;
 
 
 [RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 public class MarchingSquares : MonoBehaviour
 {
     [SerializeField, Range(1, 100)] private int width = 10, depth = 5;
-    [SerializeField, Range(0f, 100f)] private float maxHeight = 0, noiseXOffset = 1f, noiseYOffset = 1f, noiseScale = 2f;
+    [SerializeField, Range(0f, 100f)] private float maxHeight = 1, noiseXOffset = 1f, noiseYOffset = 1f, noiseScale = 2f;
     [SerializeField, Range(0f, 1f)] private float threshholdValue = 0.5f;
 
 
@@ -54,7 +55,10 @@ public class MarchingSquares : MonoBehaviour
             if (w < threshholdValue) w = 0;
             w = Mathf.Min(w, 1f);
 
-            positions[index++] = new Vector4(x, (w - threshholdValue) * maxHeight, z, w);
+            float y = (w - threshholdValue) * maxHeight;
+            y = Mathf.Max(0, y);
+
+            positions[index++] = new Vector4(x, y, z, w);
         }
         ////////////////////////////////////////////////////////////////////////////////////
 
@@ -95,6 +99,14 @@ public class MarchingSquares : MonoBehaviour
         Vector3 c = (Vector3)(v10 + v11) / 2f; 
         Vector3 d = (Vector3)(v00 + v10) / 2f;
 
+        if (v00.w.Equals(0) || v01.w.Equals(0) || v10.w.Equals(0) || v11.w.Equals(0))
+        {
+            center.y = 0;
+            a.y = 0;
+            b.y = 0;
+            c.y = 0;
+            d.y = 0;
+        }
 
         void AddVerticies(params Vector3[] vertexArr)
         {
