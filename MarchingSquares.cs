@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.PlayerLoop;
@@ -7,9 +7,10 @@ using UnityEngine.PlayerLoop;
 [RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 public class MarchingSquares : MonoBehaviour
 {
-    [SerializeField, Range(1, 100)] private int width = 10, depth = 5;
-    [SerializeField, Range(0f, 100f)] private float maxHeight = 1, noiseXOffset = 1f, noiseYOffset = 1f, noiseScale = 2f;
     [SerializeField, Range(0f, 1f)] private float threshholdValue = 0.5f;
+    [SerializeField, Range(1, 100)] private int width = 10, depth = 5;
+    [SerializeField, Range(0f, 100f)] private float maxHeight = 1, noiseXOffset = 1f, noiseYOffset = 1f;
+    [HideInInspector]public float[] noiseScales;
 
 
     private Vector4[] positions;
@@ -47,16 +48,26 @@ public class MarchingSquares : MonoBehaviour
         for (float z = -depth / 2f; z <= depth / 2f; z++)
         for (float x = -width / 2f; x <= width / 2f; x++)
         {
-            float xCoord = noiseXOffset + (x + width / 2f) / width * noiseScale;
-            float yCoord = noiseYOffset + (z + depth/ 2f) / depth * noiseScale;
+            float w = 0 ,y = 0;
+            foreach (float noiseScale in noiseScales)
+            {
+                float xCoord = noiseYOffset + (z + depth/ 2f) / depth * noiseScale;
+                float yCoord = noiseXOffset + (x + width / 2f) / width * noiseScale;
 
-            
-            float w = Mathf.PerlinNoise(xCoord, yCoord);
+                float noise = Mathf.PerlinNoise(xCoord, yCoord);
+
+                w += noise;
+
+                float dy = noise - threshholdValue;
+                dy = Mathf.Max(0, dy);
+                y += dy * maxHeight;
+            }
+
+            w /= noiseScales.Length;
+
             if (w < threshholdValue) w = 0;
             w = Mathf.Min(w, 1f);
 
-            float y = (w - threshholdValue) * maxHeight;
-            y = Mathf.Max(0, y);
 
             positions[index++] = new Vector4(x, y, z, w);
         }
