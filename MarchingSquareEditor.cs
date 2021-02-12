@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEditor;
-using UnityEngine.UI;
 
 
 [CustomEditor(typeof(MarchingSquares))]
@@ -13,6 +10,7 @@ public class MarchingSquareEditor : Editor
     private int lastNoiseCount = 0;
 
     private bool showNoises = false;
+    private bool showNormals = false;
 
     private void OnEnable()
     {
@@ -41,8 +39,9 @@ public class MarchingSquareEditor : Editor
 
              EditorGUILayout.EndFoldoutHeaderGroup();
 
-            
-            if (check.changed)
+             showNormals = EditorGUILayout.Toggle("Show Normals", showNormals);
+
+            if (check.changed || GUILayout.Button("Recalculate"))
             {
                 if (noiseCount != lastNoiseCount)
                 {
@@ -56,7 +55,36 @@ public class MarchingSquareEditor : Editor
                     lastNoiseCount = noiseCount;
                 }
 
-                ms.GenerateVerticies();
+                ms.GenerateVertices();
+            }
+        }
+    }
+
+    private void OnSceneGUI()
+    {
+        if (showNormals)
+        {
+            MarchingSquares t = target as MarchingSquares;
+
+            if (t == null)
+                return;
+
+            MeshFilter meshFilter = t.GetComponent<MeshFilter>();
+
+            if (meshFilter == null)
+                return;
+
+
+            Mesh mesh = meshFilter.sharedMesh;
+
+
+            for (int i = 0; i < mesh.vertexCount; i++)
+            {
+                Handles.matrix = t.transform.localToWorldMatrix;
+                Handles.color = Color.yellow;
+                Handles.DrawLine(
+                    mesh.vertices[i],
+                    mesh.vertices[i] + mesh.normals[i]);
             }
         }
     }

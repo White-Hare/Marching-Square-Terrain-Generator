@@ -8,14 +8,17 @@ using UnityEngine.PlayerLoop;
 public class MarchingSquares : MonoBehaviour
 {
     [SerializeField, Range(0f, 1f)] private float threshholdValue = 0.5f;
-    [SerializeField, Range(1, 100)] private int width = 10, depth = 5;
-    [SerializeField, Range(0f, 100f)] private float maxHeight = 1, noiseXOffset = 1f, noiseYOffset = 1f;
+    [SerializeField, Range(1, 200)] private int width = 10, depth = 5;
+    [SerializeField, Range(0f, 100f)] private float stepHeight = 1;
+    [SerializeField, Range(-1000f, 1000f)] private float noiseXOffset = 0f, noiseYOffset = 0f;
+
     [HideInInspector]public float[] noiseScales;
 
 
     private Vector4[] positions;
 
     private List<Vector3> verticies;
+    private List<Vector2> uv;
     private List<int> indicies;
     private Dictionary<Vector3, int> vertexIndexRelationShip;
     private int lastIndex = 0;
@@ -25,7 +28,7 @@ public class MarchingSquares : MonoBehaviour
 
     private void Awake()
     {
-        GenerateVerticies();
+        GenerateVertices();
     }
 
     private void SetDefualtValues()
@@ -35,11 +38,12 @@ public class MarchingSquares : MonoBehaviour
         
         verticies = new List<Vector3>();
         indicies = new List<int>();
+        uv = new List<Vector2>();
         vertexIndexRelationShip = new Dictionary<Vector3, int>();
         lastIndex = 0;
     }
 
-    public void GenerateVerticies()
+    public void GenerateVertices()
     {
         SetDefualtValues();
 
@@ -49,25 +53,23 @@ public class MarchingSquares : MonoBehaviour
         for (float x = -width / 2f; x <= width / 2f; x++)
         {
             float w = 0 ,y = 0;
-            foreach (float noiseScale in noiseScales)
+            for (int i = 0; i < noiseScales.Length; i++)
             {
-                float xCoord = noiseYOffset + (z + depth/ 2f) / depth * noiseScale;
-                float yCoord = noiseXOffset + (x + width / 2f) / width * noiseScale;
+                float xCoord = noiseYOffset + (z + depth/ 2f) / depth * noiseScales[i];
+                float yCoord = noiseXOffset + (x + width / 2f) / width * noiseScales[i];
 
                 float noise = Mathf.PerlinNoise(xCoord, yCoord);
 
-                w += noise;
+                float dy = 1 / Mathf.Pow(2, i);
+                y += dy;
 
-                float dy = noise - threshholdValue;
-                dy = Mathf.Max(0, dy);
-                y += dy * maxHeight;
+                float dw = noise * dy ;
+                w += dw;
             }
 
-            w /= noiseScales.Length;
 
-            if (w < threshholdValue) w = 0;
-            w = Mathf.Min(w, 1f);
-
+            w = Mathf.Min(Mathf.Max(0, w / y - threshholdValue), 1);
+            y = (int)(w * stepHeight);
 
             positions[index++] = new Vector4(x, y, z, w);
         }
@@ -77,7 +79,7 @@ public class MarchingSquares : MonoBehaviour
         for(int z = 0, i = 0; z < depth; z++, i++)
         for (int x = 0; x < width; x++, i++)
         {
-            AddVerticies(
+            AddVertices(
                 positions[i + width + 2], 
                 positions[i + width + 1], 
                 positions[i + 1], 
@@ -96,10 +98,15 @@ public class MarchingSquares : MonoBehaviour
         indicies.Clear();
         indicies = null;
 
+        mesh.uv = uv.ToArray();
+        uv.Clear();
+        uv = null;
+
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
     }
 
-    private void AddVerticies(Vector4 v11, Vector4 v10, Vector4 v01,Vector4 v00)
+    private void AddVertices(Vector4 v11, Vector4 v10, Vector4 v01,Vector4 v00)
     {
         int cs = (int)(Mathf.Ceil(v11.w) * 8 + Mathf.Ceil(v10.w) * 4 + Mathf.Ceil(v01.w) * 2 + Mathf.Ceil(v00.w) * 1);
 
@@ -110,7 +117,7 @@ public class MarchingSquares : MonoBehaviour
         Vector3 c = (Vector3)(v10 + v11) / 2f; 
         Vector3 d = (Vector3)(v00 + v10) / 2f;
 
-        if (v00.w.Equals(0) || v01.w.Equals(0) || v10.w.Equals(0) || v11.w.Equals(0))
+        if (v00.w <= 0 || v01.w <= 0 || v10.w <= 0 || v11.w <= 0)
         {
             center.y = 0;
             a.y = 0;
@@ -119,7 +126,7 @@ public class MarchingSquares : MonoBehaviour
             d.y = 0;
         }
 
-        void AddVerticies(params Vector3[] vertexArr)
+        void AddVertices(params Vector3[] vertexArr)
         {
             foreach (Vector3 vertex in vertexArr)
             {
@@ -128,9 +135,42 @@ public class MarchingSquares : MonoBehaviour
 
                 else
                 {
+
+
                     vertexIndexRelationShip.Add(vertex, lastIndex);
 
                     this.verticies.Add(vertex);
+
+
+                    int s = 0;
+                    foreach (Vector3 v2 in vertexArr)
+                    {
+                        if(vertex == v2) continue;
+
+                        if (!vertex.y.Equals(v2.y))
+                            s++;
+                    }
+
+                    Vector2 uvVec;
+                    switch (s)
+                    {
+                        case 0:
+                            uvVec = new Vector2(vertex.x / width + 0.5f, vertex.z / depth + 0.5f); 
+                            break;
+
+                        case 1:
+                            uvVec = new Vector2((vertex.x - 1 + Mathf.Sqrt(2)) / width + 0.5f, vertex.z / depth + 0.5f); 
+                            break;
+
+                        default:
+                            uvVec = new Vector2((vertex.x - 1 + Mathf.Sqrt(2)) / width + 0.5f, vertex.z / depth + 0.5f);
+                            break;
+                    }
+
+                    this.uv.Add(uvVec);
+
+
+
                     this.indicies.Add(lastIndex++);
                 }
             }    
@@ -141,22 +181,22 @@ public class MarchingSquares : MonoBehaviour
             case 0:
                 break;
             case 1:
-                AddVerticies(d, a, (Vector3)v00);
+                AddVertices(d, a, (Vector3)v00);
                 break;
             case 2:
-                AddVerticies(a, b, (Vector3)v01);
+                AddVertices(a, b, (Vector3)v01);
                 break;
             case 3:
-                AddVerticies((Vector3)v00, d, b, (Vector3)v00, b, (Vector3)v01);
+                AddVertices((Vector3)v00, d, b, (Vector3)v00, b, (Vector3)v01);
                 break;
             case 4:
-                AddVerticies(c, d, (Vector3)v10);
+                AddVertices(c, d, (Vector3)v10);
                 break;
             case 5:
-                AddVerticies((Vector3)v00, c, a, (Vector3)v00, (Vector3)v10, c);
+                AddVertices((Vector3)v00, c, a, (Vector3)v00, (Vector3)v10, c);
                 break;
             case 6:
-                AddVerticies(
+                AddVertices(
                     a, b, (Vector3)v01,
                     a, c, b,
                     a, d, c,
@@ -164,17 +204,17 @@ public class MarchingSquares : MonoBehaviour
                 );
                 break;
             case 7:
-                AddVerticies(
+                AddVertices(
                     (Vector3) v00, (Vector3) v10, (Vector3) v01,
                     (Vector3) v01, c, b,
                     (Vector3) v01, (Vector3) v10, c
                 );
                 break;
             case 8:
-                AddVerticies(b, c,(Vector3)v11);
+                AddVertices(b, c,(Vector3)v11);
                 break;
             case 9:
-                AddVerticies(
+                AddVertices(
                     a, (Vector3) v00, d,
                     a, c, b,
                     a, d, c,
@@ -182,32 +222,32 @@ public class MarchingSquares : MonoBehaviour
                 );
                 break;
             case 10:
-                AddVerticies((Vector3)v01, a, (Vector3)v11, a, c, (Vector3)v11);
+                AddVertices((Vector3)v01, a, (Vector3)v11, a, c, (Vector3)v11);
                 break;
             case 11:
-                AddVerticies(
+                AddVertices(
                     (Vector3)v00, d, (Vector3)v01,
                     c, (Vector3)v01, d,
                     (Vector3)v01, c, (Vector3)v11
                 );
                 break;
             case 12:
-                AddVerticies(d, (Vector3)v10, b, b, (Vector3)v10, (Vector3)v11);
+                AddVertices(d, (Vector3)v10, b, b, (Vector3)v10, (Vector3)v11);
                 break;
             case 13:
-                AddVerticies(
+                AddVertices(
                     (Vector3)v00, (Vector3)v10, a,
                     a, (Vector3)v10, b,
                     b, (Vector3)v10, (Vector3)v11);
                 break;
             case 14:
-                AddVerticies(
+                AddVertices(
                     a, (Vector3)v11, (Vector3)v01, 
                     a, d, (Vector3)v11,
                     d, (Vector3)v10, (Vector3)v11);
                 break;
             case 15:
-                AddVerticies((Vector3)v00, (Vector3)v10, (Vector3)v01, (Vector3)v01, (Vector3)v10, (Vector3)v11);
+                AddVertices((Vector3)v00, (Vector3)v10, (Vector3)v01, (Vector3)v01, (Vector3)v10, (Vector3)v11);
                 break;
 
             default:
